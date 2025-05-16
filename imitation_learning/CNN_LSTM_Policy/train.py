@@ -4,9 +4,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
-from CNN_LSTM import RGBDTemporalNetWithSpatialAttention
+# from CNN_LSTM import RGBDTemporalNetWithSpatialAttention
+from CNN_LSTM import RGBDNetLight
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 dataset_dir='hdf5_dataset'
 num_episodes=45
 
@@ -14,14 +16,16 @@ batch_size_train=1
 batch_size_val=1
 train_dataloader, val_dataloader, norm_stats=load_data(dataset_dir, num_episodes,  batch_size_train, batch_size_val)
 
-num_epochs=2000
+num_epochs=200
 lr=1e-3
 device='cuda'
-model=RGBDTemporalNetWithSpatialAttention().cuda()
+model=RGBDNetLight().cuda()
 model.to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 criterion = nn.MSELoss()
 
+
+save_dir='imitation_learning/CNN_LSTM_Policy/checkpoints'
 
 
 for epoch in range(num_epochs):
@@ -31,7 +35,12 @@ for epoch in range(num_epochs):
 
     # 遍历训练集
     for batch in tqdm(train_dataloader, desc=f"Epoch {epoch+1}"):
+
+        
         depth, rgb, actions= batch
+        
+        actions = actions.float()
+
         depth = depth.to(device)
         rgb = rgb.to(device)
         actions = actions.to(device)
@@ -55,7 +64,10 @@ for epoch in range(num_epochs):
 
     avg_loss = total_loss / num_batches
     print(f"[Epoch {epoch+1}] Train Loss: {avg_loss:.4f}")
-    
+
+save_path = os.path.join(save_dir, 'rgbdnet_light.pt')
+torch.save(model.state_dict(), save_path)
+print("模型已保存为 saved_model.pt")
 
 # val_losses = []
 
