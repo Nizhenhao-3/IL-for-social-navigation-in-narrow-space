@@ -16,7 +16,6 @@ batch_size_train=1
 batch_size_val=1
 train_dataloader, val_dataloader, norm_stats=load_data(dataset_dir, num_episodes,  batch_size_train, batch_size_val)
 
-num_epochs=200
 lr=1e-3
 device='cuda'
 model=RGBDNetLight().cuda()
@@ -28,7 +27,22 @@ criterion = nn.MSELoss()
 save_dir='imitation_learning/CNN_LSTM_Policy/checkpoints'
 
 
-for epoch in range(num_epochs):
+
+num_epochs = 200
+save_path = os.path.join(save_dir, 'rgbdnet_light.pt')
+
+num_additional_epochs = 200
+
+# 如果模型文件不存在，从头开始训练；如果存在，加载继续训练
+if not os.path.exists(save_path):
+    print("从头开始训练...")
+    start_epoch = 0
+else:
+    print("加载已有模型继续训练...")
+    model.load_state_dict(torch.load(save_path))
+    start_epoch = 200  # 假设之前已经训练了200轮
+
+for epoch in range(start_epoch, start_epoch + num_additional_epochs):
     model.train()
     total_loss = 0.0
     num_batches = 0
@@ -69,40 +83,3 @@ save_path = os.path.join(save_dir, 'rgbdnet_light.pt')
 torch.save(model.state_dict(), save_path)
 print("模型已保存为 saved_model.pt")
 
-# val_losses = []
-
-# for epoch in range(num_epochs):
-#     model.train()
-#     train_loss = 0.0
-#     for depth, rgb, action in train_dataloader:
-#         depth, rgb, action = depth.to(device), rgb.to(device), action.to(device)
-#         pred = model(depth, rgb)
-#         loss = loss_fn(pred, action)
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-#         train_loss += loss.item()
-
-   
-#     train_loss /= len(train_loader)
-#     val_loss /= len(val_loader)
-#     train_losses.append(train_loss)
-#     val_losses.append(val_loss)
-
-#     print(f"Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-
-#     return train_losses, val_losses
-
-
-# model = RGBDTemporalNet()
-# train_losses, val_losses = train_model(model, train_dataloader, val_loader, num_epochs=10, lr=1e-3)
-
-# # Plot loss
-# plt.plot(train_losses, label="Train Loss")
-# plt.plot(val_losses, label="Val Loss")
-# plt.xlabel("Epoch")
-# plt.ylabel("Loss")
-# plt.legend()
-# plt.title("Training vs Validation Loss")
-# plt.grid(True)
-# plt.show()
