@@ -8,10 +8,7 @@ import IPython
 e = IPython.embed
 
 dataset_dir="hdf5_dataset"
-# episode_ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-# episode_id=str(episode_ids[1]).zfill(3)
-# dataset_path = os.path.join(dataset_dir, f'episode_{episode_id}.hdf5')
-# print(dataset_path)
+
 
 
 class EpisodicDataset(torch.utils.data.Dataset):
@@ -28,56 +25,31 @@ class EpisodicDataset(torch.utils.data.Dataset):
         return len(self.episode_ids)
 
     def __getitem__(self, index):
-        sample_full_episode = False # hardcode
-
         episode_id = str(self.episode_ids[index]).zfill(3)
         dataset_path = os.path.join(self.dataset_dir, f'episode_{episode_id}.hdf5')
         with h5py.File(dataset_path, 'r') as root:
+            episode_len = root['actions/velocity'].shape[0]
             
-            original_action_shape = root['actions/velocity'].shape#(380,3),线速度x,y与角速度z
-            episode_len = original_action_shape[0]
-            if sample_full_episode:
-                start_ts = 0
-            else:
-                start_ts = np.random.choice(episode_len)
-            # get observation at start_ts only
-            #可以更改，增加/odom中的位置作为观测
-            depth_img= root['/observations/depth'][start_ts]
-            rgb_img = root['/observations/rgb'][start_ts]
-            
-            
-            
-            action = root['actions/velocity'][start_ts:]
-            action_len = episode_len - start_ts
-          
+            # print(f"episode_id: {episode_id}, start_ts: {start_ts}")
 
-        
-        padded_action = np.zeros(original_action_shape, dtype=np.float32)
-        padded_action[:action_len] = action
-        is_pad = np.zeros(episode_len)
-        is_pad[action_len:] = 1
+            # 图像
+            depth_img = root['/observations/depth'][()]
+            rgb_img = root['/observations/rgb'][()]
 
-        # new axis for different cameras
-       
+            # 当前帧动作
+            action = root['actions/velocity'][()]  # shape: 
 
-        # construct observations
-        depth_img_data=torch.from_numpy(depth_img)
-        rgb_img_data=torch.from_numpy(rgb_img).float()
-        action_data = torch.from_numpy(padded_action).float()
-        is_pad = torch.from_numpy(is_pad).bool()
+        # Tensor 转换
+        depth_img_data = torch.from_numpy(depth_img)/ 255.0
+        rgb_img_data = torch.from_numpy(rgb_img) / 255.0
+        rgb_img_data=torch.einsum('t h w c -> t c h w', rgb_img_data)
 
-        # channel last
-        
-        rgb_img_data = torch.einsum('h w c -> c h w', rgb_img_data)
-   
-
-        # normalize image and change dtype to float
-        depth_img_data= depth_img_data / 255.0
-        rgb_img_data = rgb_img_data / 255.0
-
+        action_data = torch.from_numpy(action).float()
         action_data = (action_data - self.norm_stats["action_mean"]) / self.norm_stats["action_std"]
 
-        return depth_img_data, rgb_img_data, action_data, is_pad
+        return depth_img_data, rgb_img_data, action_data
+
+        
         
 def get_norm_stats(dataset_dir, num_episodes):
     #num_episode=45
@@ -109,7 +81,7 @@ def get_norm_stats(dataset_dir, num_episodes):
     return stats
 
 
-def load_data(dataset_dir, num_episodes,  batch_size_train, batch_size_val):
+def load_data_all(dataset_dir, num_episodes,  batch_size_train, batch_size_val):
     print(f'\nData from: {dataset_dir}\n')
     # obtain train test split
     train_ratio = 0.8#百分之80用于训练
@@ -129,25 +101,3 @@ def load_data(dataset_dir, num_episodes,  batch_size_train, batch_size_val):
     return train_dataloader, val_dataloader, norm_stats
 
 
-
-
-
-def compute_dict_mean(epoch_dicts):
-    result = {k: None for k in epoch_dicts[0]}
-    num_items = len(epoch_dicts)
-    for k in result:
-        value_sum = 0
-        for epoch_dict in epoch_dicts:
-            value_sum += epoch_dict[k]
-        result[k] = value_sum / num_items
-    return result
-
-def detach_dict(d):
-    new_d = dict()
-    for k, v in d.items():
-        new_d[k] = v.detach()
-    return new_d
-
-def set_seed(seed):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
